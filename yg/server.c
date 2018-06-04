@@ -186,7 +186,7 @@ void* receive_ans(void* arg){
         printf("%d님이 설문조사에 응했습니다\n",clnt_sock_id);
         pthread_mutex_lock(&mutx);
         responded++;
-        if(atoi(msg)==5)                                               //기타 의견일시
+        if(atoi(msg)==otherOption)                                               //기타 의견일시
         {
             fgets(otherOptString[num_otherOption],BUF_SIZE,stdin);     //의견을 배열 otherOptString에 저장
             num_otherOption++;
