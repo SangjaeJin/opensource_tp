@@ -25,7 +25,7 @@ typedef struct{
     int optionNum,votes;
 }Vote;
 
-int otherOption,num_otherOption;
+int otherOption,num_otherOption=0;
 char otherOptString[MAX_CLNT][BUF_SIZE];
 Vote result[10];
 int options,responded;
@@ -158,6 +158,13 @@ int main(int argc ,char *argv[]){
         fprintf(sock_fp, "결과는...\n ");
         for(int j=0;j<options;j++)
             fprintf(sock_fp, "%d위: %d번, \n",j+1,result[j].optionNum);
+        if(num_otherOption!=0)                              //기타 의견이 있을시 함께 출력
+        {
+            fprintf(sock_fp,"기타 의견은 ...\n");
+            for(int k=0; k<num_otherOption; k++)
+                fprintf(sock_fp,"%s\n",otherOptString[k]);
+            fprintf(sock_fp,"가 있습니다.\n");
+        }
         close(clnt_socks[i]);
     }
     close(server_sock_id);
@@ -179,6 +186,15 @@ void* receive_ans(void* arg){
         printf("%d님이 설문조사에 응했습니다\n",clnt_sock_id);
         pthread_mutex_lock(&mutx);
         responded++;
+        if(atoi(msg)==5)                                               //기타 의견일시
+        {
+            fgets(otherOptString[num_otherOption],BUF_SIZE,stdin);     //의견을 배열 otherOptString에 저장
+            num_otherOption++;
+            
+            pthread_mutex_unlock(&mutx);                          //종료 전 mutex를 unlock
+            
+            return NULL;
+        }
         result[atoi(msg)-1].votes++;
         pthread_mutex_unlock(&mutx);
         return NULL;
