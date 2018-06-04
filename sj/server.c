@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 #define HOSTLEN 256
 #define oops(msg) { perror(msg); exit(1);}
@@ -27,7 +28,7 @@ typedef struct{
 int otherOption,num_otherOption;
 char otherOptString[MAX_CLNT][BUF_SIZE];
 Vote result[10];
-int options;
+int options,responded;
 
 int clnt_cnt=0;                                                //접속한 클라이언트수 카운트
 int clnt_socks[MAX_CLNT];
@@ -52,13 +53,17 @@ int main(int argc ,char *argv[]){
     int server_sock_id;
     int clnt_sock_id,clnt_addr_sz;          // 클라이언트의 소켓 정보 저장 용도
     FILE* sock_fp;
-    struct sockaddr_in saddr,clntaddr;
+    struct sockaddr_in serveraddr,clntaddr;
     struct hostent *hp;
     char hostname[HOSTLEN], question[20000]={0};
     pthread_t t_id;
     
     pthread_mutex_init(&mutx, NULL);
     
+    if(argc!=2){
+        printf("usage: %s <port>\n",argv[0]);
+        exit(-1);
+    }
     /*
      * step1 :소켓 획득
      */
@@ -67,15 +72,17 @@ int main(int argc ,char *argv[]){
         oops("socket");
     
     /*
-     *  step2 소켓주소 얻어오기, 초기화작업들
+     *  step2 프로토콜 설정, 초기화작업들
      */
-    bzero ((void*)&saddr,sizeof(saddr));
+    bzero ((void*)&serveraddr,sizeof(serveraddr));
     gethostname(hostname,HOSTLEN);
     hp= gethostbyname(hostname);
-    bcopy((void*)hp->h_addr_list, (void*)&saddr.sin_addr, hp->h_length);
-    saddr.sin_port= htons(atoi(argv[1]));
-    saddr.sin_family = AF_INET;
-    if(bind(server_sock_id, (struct sockaddr*)&saddr, sizeof(saddr)) !=0 )
+    bcopy((void*)hp->h_addr_list, (void*)&serveraddr.sin_addr, hp->h_length);          //첫번째 인자 책이랑 다름,.....
+    serveraddr.sin_port= htons(atoi(argv[1]));
+    serveraddr.sin_family = AF_INET;
+    serveraddr.sin_addr.s_addr  = htonl(INADDR_ANY);                               // 자동으로 ip가 할당된다....
+
+    if(bind(server_sock_id, (struct sockaddr*)&serveraddr, sizeof(serveraddr)) !=0 )
         oops("bind");
     
     /*
@@ -90,12 +97,12 @@ int main(int argc ,char *argv[]){
      예를 들어, 1,2,3,4 번의 선택지가 있을 시 , 클라이언트가 4개의 선택지모두 마음에 들지 않을 시,
      5번을 입력하고 , 다른 의견을 입력할 수 있음.
      */
-    printf("state question ");
+    printf("설문조사를 입력하세요. \n");
     fgets(question, 19999, stdin);
-    printf("what is your last question number?");
+    printf("제대로 입력받았습니다. 마지막 선택지의 번호가 몇번인가요?\n");
     scanf("%d",&options);
     otherOption = options+1;
-    
+    printf("제대로 입력받았습니다. 설문조사를 전송합니다\n");
     
     /*
      한 사람씩 연결해 설문조사를 던지는 부분.
@@ -127,13 +134,17 @@ int main(int argc ,char *argv[]){
          */
         pthread_create(&t_id, NULL, receive_ans, (void*)&clnt_sock_id);
         pthread_detach(t_id);                                                // 메인쓰레드에서 분리
+        printf("연결된 클라이언트: No.%d from <%s>\n", clnt_cnt, inet_ntoa(clntaddr.sin_addr));    //새로 연결된 클라이언트 정보
     }
+    
+    // @@@@@@@@!!!!!!!!! ----------- 응답을 다 할때까지 기다리는 함수 추가해야됨. !!!!!!!!!!!! @@@@@@@@@
     
      /*
       result[0].votes :1번을 선택한 사람의 수, result[1].votes:2번을 선택한 사람의 수  ....
       result[0].optionNum :1 , result[1].optionNum :2....
       votes의 내림차순으로 정렬
       */
+    
     for(int i=0;i<options;i++)
         result[i].optionNum= i+1;
     sort(result);
@@ -165,7 +176,9 @@ void* receive_ans(void* arg){
      if문 탈출.
      */
     if((str_len=read(clnt_sock_id, msg, sizeof(msg)))!=0){
+        printf("%d님이 설문조사에 응했습니다\n",clnt_sock_id);
         pthread_mutex_lock(&mutx);
+        responded++;
         result[atoi(msg)-1].votes++;
         pthread_mutex_unlock(&mutx);
         return NULL;
@@ -175,6 +188,7 @@ void* receive_ans(void* arg){
      아무 입력안했기 때문에 클라이언트 목록에서 제거.
      전역변수 clnt_cnt에 접근하기 때문에 뮤텍스 필요
      */
+    printf("%d님이 설문조사에 응하지 않았습니다\n",clnt_sock_id);
     pthread_mutex_lock(&mutx);                                //클라이언트 제거동작중 메모리접근 보호
     for(i=0; i<clnt_cnt; i++)   {                            //remove disconnected client
         if(clnt_sock_id==clnt_socks[i])    {                    //종료한 클라이언트소켓 필터링
@@ -183,6 +197,7 @@ void* receive_ans(void* arg){
             break;
         }
     }
+    responded++;
     clnt_cnt--;                                                //종료한 클라이언트 있기때문에 전체 클라이언트수 -1
     pthread_mutex_unlock(&mutx);                            //클라이언트 제거중 메모리접근 보호 해제
     close(clnt_sock_id);
