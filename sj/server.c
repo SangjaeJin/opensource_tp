@@ -137,6 +137,12 @@ int main(int argc ,char *argv[]){
         printf("연결된 클라이언트: No.%d from <%s>\n", clnt_cnt, inet_ntoa(clntaddr.sin_addr));    //새로 연결된 클라이언트 정보
     }
     
+    while(1)                           // 모든 클라이언트가 응답을 다 할때까지 blocked상태로 유지
+    {
+        if(responded==MAX_CLNT)
+            break;
+        sleep(2);                    
+    }
     // @@@@@@@@!!!!!!!!! ----------- 응답을 다 할때까지 기다리는 함수 추가해야됨. !!!!!!!!!!!! @@@@@@@@@
     
     /*
