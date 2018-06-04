@@ -25,7 +25,7 @@ typedef struct{
     int optionNum,votes;
 }Vote;
 
-int otherOption,num_otherOption;
+int otherOption,num_otherOption=0;
 char otherOptString[MAX_CLNT][BUF_SIZE];
 Vote result[10];
 int options,responded;
@@ -81,7 +81,7 @@ int main(int argc ,char *argv[]){
     serveraddr.sin_port= htons(atoi(argv[1]));
     serveraddr.sin_family = AF_INET;
     serveraddr.sin_addr.s_addr  = htonl(INADDR_ANY);                               // 자동으로 ip가 할당된다....
-
+    
     if(bind(server_sock_id, (struct sockaddr*)&serveraddr, sizeof(serveraddr)) !=0 )
         oops("bind");
     
@@ -119,13 +119,13 @@ int main(int argc ,char *argv[]){
             oops("fdopen");
         
         /*
-          여기서 뮤텍스를 쓰는 이유는 밑에서 쓰레드로 함수실행해서 전역변수인 clnt_cnt에 접근하기 때문
+         여기서 뮤텍스를 쓰는 이유는 밑에서 쓰레드로 함수실행해서 전역변수인 clnt_cnt에 접근하기 때문
          */
         pthread_mutex_lock(&mutx);
         clnt_socks[clnt_cnt++]= clnt_sock_id;             // 한명씩 클라이언트의 수 증가시켜줌. 클라이언트가 다수기 때문에, 클라이언트가 응답을 하지 않을시 삭제해야 되기때문에 배열 선언.
         pthread_mutex_unlock(&mutx);
         fprintf(sock_fp, "%s",question);
-
+        
         
         /*
          쓰레드를 생성하는 이유는
@@ -139,11 +139,11 @@ int main(int argc ,char *argv[]){
     
     // @@@@@@@@!!!!!!!!! ----------- 응답을 다 할때까지 기다리는 함수 추가해야됨. !!!!!!!!!!!! @@@@@@@@@
     
-     /*
-      result[0].votes :1번을 선택한 사람의 수, result[1].votes:2번을 선택한 사람의 수  ....
-      result[0].optionNum :1 , result[1].optionNum :2....
-      votes의 내림차순으로 정렬
-      */
+    /*
+     result[0].votes :1번을 선택한 사람의 수, result[1].votes:2번을 선택한 사람의 수  ....
+     result[0].optionNum :1 , result[1].optionNum :2....
+     votes의 내림차순으로 정렬
+     */
     
     for(int i=0;i<options;i++)
         result[i].optionNum= i+1;
@@ -158,6 +158,13 @@ int main(int argc ,char *argv[]){
         fprintf(sock_fp, "결과는...\n ");
         for(int j=0;j<options;j++)
             fprintf(sock_fp, "%d위: %d번, \n",j+1,result[j].optionNum);
+        if(num_otherOption!=0)                              //기타 의견이 있을시 함께 출력
+        {
+            fprintf(sock_fp,"기타 의견은 ...\n");
+            for(int k=0; k<num_otherOption; k++)
+                fprintf(sock_fp,"%s\n",otherOptString[k]);
+            fprintf(sock_fp,"가 있습니다.\n");
+        }
         close(clnt_socks[i]);
     }
     close(server_sock_id);
@@ -179,6 +186,15 @@ void* receive_ans(void* arg){
         printf("%d님이 설문조사에 응했습니다\n",clnt_sock_id);
         pthread_mutex_lock(&mutx);
         responded++;
+        if(atoi(msg)==otherOption)                                               //기타 의견일시
+        {
+            fgets(otherOptString[num_otherOption],BUF_SIZE,stdin);     //의견을 배열 otherOptString에 저장
+            num_otherOption++;
+            
+            pthread_mutex_unlock(&mutx);                          //종료 전 mutex를 unlock
+            
+            return NULL;
+        }
         result[atoi(msg)-1].votes++;
         pthread_mutex_unlock(&mutx);
         return NULL;
