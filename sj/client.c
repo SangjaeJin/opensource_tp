@@ -5,6 +5,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <errno.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 
 #define oops(msg) { perror(msg); exit(1);}
@@ -28,7 +30,7 @@ int main(int argc, char *argv[]) {
     int isQuestionReceived = 0; // 이미 설문을 서버로 붙어 전달 받은 상태인가?
     
     // 포트 옵션 주면 따로 포트 설정가능 안주면 MYPORT로 설정.
-    if(argc==2 || argc==4){
+    /*if(argc==2 || argc==4){
         if(!strcmp("-p",argv[1])){
             if(argc==2) {
                 oops("Invalid parameters.\nUsage: ./chat [-p PORT] HOSTNAME\n");
@@ -42,7 +44,13 @@ int main(int argc, char *argv[]) {
             port=MYPORT;
             strcpy(hostname,argv[1]);
         }
+    }*/
+    
+    if(argc!=4) {
+        printf("Usage : %s <IP> <port> <name>\n", argv[0]);
+        exit(1);
     }
+    
     // 통신 규약
     printf("\n*** Poll Client starting (enter \"quit\" to stop): \n");
     fflush(stdout);
@@ -57,9 +65,9 @@ int main(int argc, char *argv[]) {
     if (hp == NULL)
         oops(hostname);*/
     memset(&servadd,0,sizeof(servadd));
-    servadd.sin_port = htons(port);
-    servadd.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr= "211.51.176.149"
+    serv_addr.sin_family=AF_INET;
+    serv_addr.sin_addr.s_addr=inet_addr(argv[1]);
+    serv_addr.sin_port=htons(atoi(argv[2]));
     
     /* 서버에 연결 */
     if(connect(sock_id, (struct sockaddr *)&servadd, sizeof(servadd)) != 0)
