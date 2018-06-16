@@ -65,9 +65,9 @@ int main(int argc, char *argv[]) {
     if (hp == NULL)
         oops(hostname);*/
     memset(&servadd,0,sizeof(servadd));
-    serv_addr.sin_family=AF_INET;
-    serv_addr.sin_addr.s_addr=inet_addr(argv[1]);
-    serv_addr.sin_port=htons(atoi(argv[2]));
+    servadd.sin_family=AF_INET;
+    servadd.sin_addr.s_addr=inet_addr(argv[1]);
+    servadd.sin_port=htons(atoi(argv[2]));
     
     /* 서버에 연결 */
     if(connect(sock_id, (struct sockaddr *)&servadd, sizeof(servadd)) != 0)
