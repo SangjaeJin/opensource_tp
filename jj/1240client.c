@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #define oops(msg) { perror(msg); exit(1);}
 #define BUF_SIZE 1000
