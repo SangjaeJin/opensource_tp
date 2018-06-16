@@ -56,6 +56,7 @@ int main(int argc, char *argv[]) {
     hp = gethostbyname(hostname);
     if (hp == NULL)
         oops(hostname);*/
+    memset(&servadd,0,sizeof(servadd));
     servadd.sin_port = htons(port);
     servadd.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr= "211.51.176.149"
