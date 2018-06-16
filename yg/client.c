@@ -9,7 +9,7 @@
 
 #define oops(msg) { perror(msg); exit(1);}
 #define BUF_SIZE 1000
-#define MYPORT 7400      //기본 port (server와 협의 필요)
+#define MYPORT 2000      //기본 port (server와 협의 필요)
 
 int main(int argc, char *argv[]) {
 
