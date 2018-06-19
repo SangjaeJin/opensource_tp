@@ -26,10 +26,12 @@ typedef struct{
 }Vote;
 
 int otherOption,num_otherOption=0;
-char otherOptString[MAX_CLNT][BUF_SIZE];
+char otherOptString[BUF_SIZE][BUF_SIZE];
+char buf[BUF_SIZE];
 Vote result[10];
 int options,responded;
 
+int messlen=0;
 int clnt_cnt=0;                                                //접속한 클라이언트수 카운트
 int clnt_socks[MAX_CLNT];
 
@@ -51,11 +53,9 @@ void* receive_ans(void* arg);
 
 int main(int argc ,char *argv[]){
     int server_sock_id;
-    int clnt_sock_id,clnt_addr_sz;          // 클라이언트의 소켓 정보 저장 용도
-    FILE* sock_fp;
+    int clnt_sock_id;          // 클라이언트의 소켓 정보 저장 용도
     struct sockaddr_in serveraddr,clntaddr;
-    struct hostent *hp;
-    char hostname[HOSTLEN], question[20000]={0};
+    char question[1000]={0};
     pthread_t t_id;
     
     pthread_mutex_init(&mutx, NULL);
@@ -74,10 +74,8 @@ int main(int argc ,char *argv[]){
     /*
      *  step2 프로토콜 설정, 초기화작업들
      */
-    bzero ((void*)&serveraddr,sizeof(serveraddr));
-    gethostname(hostname,HOSTLEN);
-    hp= gethostbyname(hostname);
-    bcopy((void*)hp->h_addr_list, (void*)&serveraddr.sin_addr, hp->h_length);          //첫번째 인자 책이랑 다름,.....
+    
+    memset(&serveraddr, 0, sizeof(serveraddr));
     serveraddr.sin_port= htons(atoi(argv[1]));
     serveraddr.sin_family = AF_INET;
     serveraddr.sin_addr.s_addr  = htonl(INADDR_ANY);                               // 자동으로 ip가 할당된다....
@@ -98,7 +96,8 @@ int main(int argc ,char *argv[]){
      5번을 입력하고 , 다른 의견을 입력할 수 있음.
      */
     printf("설문조사를 입력하세요. \n");
-    fgets(question, 19999, stdin);
+    fgets(question, 1000, stdin);
+    question[sizeof(question)-1]=0;
     printf("제대로 입력받았습니다. 마지막 선택지의 번호가 몇번인가요?\n");
     scanf("%d",&options);
     otherOption = options+1;
@@ -108,15 +107,14 @@ int main(int argc ,char *argv[]){
      한 사람씩 연결해 설문조사를 던지는 부분.
      */
     for(int i=0;i<MAX_CLNT;i++){
-        clnt_addr_sz= sizeof(clntaddr);
+        
         // accept: 클라이언트와의 연결을 기다림. 연결되면 그 클라이언트의 id가 반환됨
-        clnt_sock_id = accept(server_sock_id, (struct sockaddr*)&clntaddr, &clnt_addr_sz);
+        clnt_sock_id = accept(server_sock_id, (struct sockaddr*)NULL, NULL);
         if(clnt_sock_id==-1)
             oops("accept");
         
-        sock_fp = fdopen(clnt_sock_id, "w");              // fdopen 반환값 == sock_fp == 연결된 클라이언트의 id
-        if(sock_fp == NULL)
-            oops("fdopen");
+        sprintf(buf,"%d",options);                      //option의 개수를 client에 넘겨줌
+        write(clnt_sock_id,buf,BUF_SIZE);
         
         /*
          여기서 뮤텍스를 쓰는 이유는 밑에서 쓰레드로 함수실행해서 전역변수인 clnt_cnt에 접근하기 때문
@@ -124,7 +122,8 @@ int main(int argc ,char *argv[]){
         pthread_mutex_lock(&mutx);
         clnt_socks[clnt_cnt++]= clnt_sock_id;             // 한명씩 클라이언트의 수 증가시켜줌. 클라이언트가 다수기 때문에, 클라이언트가 응답을 하지 않을시 삭제해야 되기때문에 배열 선언.
         pthread_mutex_unlock(&mutx);
-        fprintf(sock_fp, "%s",question);
+        
+        write(clnt_sock_id, question, sizeof(question));
         
         
         /*
@@ -141,9 +140,8 @@ int main(int argc ,char *argv[]){
     {
         if(responded==MAX_CLNT)
             break;
-        sleep(2);                    
+        sleep(2);
     }
-    // @@@@@@@@!!!!!!!!! ----------- 응답을 다 할때까지 기다리는 함수 추가해야됨. !!!!!!!!!!!! @@@@@@@@@
     
     /*
      result[0].votes :1번을 선택한 사람의 수, result[1].votes:2번을 선택한 사람의 수  ....
@@ -155,26 +153,31 @@ int main(int argc ,char *argv[]){
         result[i].optionNum= i+1;
     sort(result);
     
-    
     /*
      응답한 클라이언트에게만 설문조사 결과를 전송.
      */
+    
     for(int i=0;i<clnt_cnt;i++){
-        sock_fp = fdopen(clnt_socks[i], "w");
-        fprintf(sock_fp, "결과는...\n ");
+        
+        write(clnt_socks[i],"결과는 ...\n",sizeof("결과는 ...\n"));
+        
         for(int j=0;j<options;j++)
-            fprintf(sock_fp, "%d위: %d번, \n",j+1,result[j].optionNum);
+        {
+            sprintf(buf,"%d위: %d번 [ %d표]\n",j+1,result[j].optionNum,result[j].votes);
+            write(clnt_socks[i],buf,sizeof(buf));
+        }
         if(num_otherOption!=0)                              //기타 의견이 있을시 함께 출력
         {
-            fprintf(sock_fp,"기타 의견은 ...\n");
+            write(clnt_socks[i],"기타 의견은...\n",sizeof("기타 의견은...\n"));
             for(int k=0; k<num_otherOption; k++)
-                fprintf(sock_fp,"%s\n",otherOptString[k]);
-            fprintf(sock_fp,"가 있습니다.\n");
+                write(clnt_socks[i],otherOptString[k],sizeof(otherOptString[k]));
+            write(clnt_socks[i],"가 있습니다.\n",sizeof("가 있습니다\n"));
         }
         close(clnt_socks[i]);
     }
+    
     close(server_sock_id);
-    close(sock_fp);
+    
     return 0;
 }
 
@@ -182,19 +185,27 @@ void* receive_ans(void* arg){
     int clnt_sock_id = *((int*)arg);
     int str_len =0,i;
     char msg[BUF_SIZE];
+    char name[BUF_SIZE];
+    
+    messlen = (int)read(clnt_sock_id,name,BUF_SIZE);              //클라이언트의 이름을 입력 받음
+    name[messlen-1]='\0';
     
     /*
      클라이언트에게서 입력받은 결과로 votes를 증가.
      만약 read가 0을 반환할시 아무 입력도 하지 않은 걸로 간주하고,
      if문 탈출.
      */
-    if((str_len=read(clnt_sock_id, msg, sizeof(msg)))!=0){
-        printf("%d님이 설문조사에 응했습니다\n",clnt_sock_id);
+    if((str_len=(int)read(clnt_sock_id, msg, sizeof(msg)))!=0){
+        
+        printf("%s님이 설문조사에 응했습니다\n",name);
         pthread_mutex_lock(&mutx);
         responded++;
+        
         if(atoi(msg)==otherOption)                                               //기타 의견일시
         {
-            fgets(otherOptString[num_otherOption],BUF_SIZE,stdin);     //의견을 배열 otherOptString에 저장
+            char other[BUF_SIZE];
+            read(clnt_sock_id,other,BUF_SIZE);              //기타 의견 받음
+            strcpy(otherOptString[num_otherOption],other);  //의견을 배열 otherOptString에 저장
             num_otherOption++;
             
             pthread_mutex_unlock(&mutx);                          //종료 전 mutex를 unlock
@@ -210,12 +221,15 @@ void* receive_ans(void* arg){
      아무 입력안했기 때문에 클라이언트 목록에서 제거.
      전역변수 clnt_cnt에 접근하기 때문에 뮤텍스 필요
      */
-    printf("%d님이 설문조사에 응하지 않았습니다\n",clnt_sock_id);
+    
+    printf("%s님이 설문조사에 응하지 않았습니다\n",name);
     pthread_mutex_lock(&mutx);                                //클라이언트 제거동작중 메모리접근 보호
     for(i=0; i<clnt_cnt; i++)   {                            //remove disconnected client
         if(clnt_sock_id==clnt_socks[i])    {                    //종료한 클라이언트소켓 필터링
-            while(i++<clnt_cnt-1)                            //클라이언트 배열에서 종료한 클라이언트 뒤에있는 클라이언트들 하나씩 앞으로
+            while(i++<clnt_cnt)                     //클라이언트 배열에서 종료한 클라이언트 뒤에있는 클라이언트들 하나씩 앞으로
+            {
                 clnt_socks[i]=clnt_socks[i+1];
+            }
             break;
         }
     }
