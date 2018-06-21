@@ -8,6 +8,3 @@ server.c 수정하실분은 제 폴더 마스터에 있는거 복붙하신다음
 
 중요한 사항은 readme.txt에 글 부담없이 남겨주세요~~
 
-해야 될 것
-1. server.c blocked 상태 만들어서 responded == 클라이언트수 만족했을때 메인함수 진행하기 (server.c 의 140~141줄)(해결 했음)
-2. client.c 작성
